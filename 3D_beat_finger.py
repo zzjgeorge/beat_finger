@@ -9,17 +9,14 @@ mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
 
-HEIGHT = 480
-WIDTH = 720
-window = pyglet.window.Window(width=WIDTH, height=HEIGHT)
+window = pyglet.window.Window(width=720, height=480)
+gluPerspective(90, 1, 0.1, 100)
+gluLookAt(5,0,0, 0,0,0, -1,0,0)
 batch = pyglet.graphics.Batch()
 
 tip = [1,0,0]
-mcp = [0,0,0]
-
-rectangle = pyglet.shapes.Rectangle(x=150, y=150, width=300, height=200, color=(255,255,255), batch=batch)
-
-
+mcp = [1,0,0]
+rot = [1,0,0]
 
 # For webcam input:
 cap = cv2.VideoCapture(0)
@@ -27,14 +24,80 @@ cap = cv2.VideoCapture(0)
 # byte_size = rows*cols*channels
 
 
+def draw_pyramid():
+    Point = ctypes.c_double * 3
+    pointO = Point(0.0, 1.0, 0.0)
+    pointA = Point(1.5, -1.0, 1.5)
+    pointB = Point(-1.5, -1.0, 1.5)
+    pointC = Point(-1.5, -1.0, -1.5)
+    pointD = Point(1.5, -1.0, -1.5)
+
+    glColor3d(1.0, 0.0, 0.0)
+    glBegin(GL_TRIANGLES)
+    glVertex3dv(pointO)
+    glVertex3dv(pointA)
+    glVertex3dv(pointB)
+    glEnd()
+
+    glColor3d(1.0, 1.0, 0.0)
+    glBegin(GL_TRIANGLES)
+    glVertex3dv(pointO)
+    glVertex3dv(pointB)
+    glVertex3dv(pointC)
+    glEnd()
+
+    glColor3d(0.0, 1.0, 1.0)
+    glBegin(GL_TRIANGLES)
+    glVertex3dv(pointO)
+    glVertex3dv(pointC)
+    glVertex3dv(pointD)
+    glEnd()
+
+    glColor3d(1.0, 0.0, 1.0)
+    glBegin(GL_TRIANGLES)
+    glVertex3dv(pointO)
+    glVertex3dv(pointD)
+    glVertex3dv(pointA)
+    glEnd()
+
+    glColor3d(1.0, 1.0, 1.0)
+    glBegin(GL_POLYGON)
+    glVertex3dv(pointA)
+    glVertex3dv(pointB)
+    glVertex3dv(pointC)
+    glVertex3dv(pointD)
+    glEnd()
+
 @window.event()
 def on_draw():
     window.clear()
-    batch.draw()
+    glMatrixMode(GL_PROJECTION)
+    glLoadIdentity()
+    gluPerspective(90.0, 1.0, 0.1, 100)
 
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+    gluLookAt(0,0,10, 0,0,0, 0,1,0)
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+    glEnable(GL_DEPTH_TEST)
+    glPushMatrix()
+    glTranslatef(-mcp[0]*10+5,-mcp[1]*10+5,0) # Z-info is at the order of 1e-9 (for relative info only)
+    glRotatef(rot[1], 1, 0, 0)
+    glRotatef(rot[2], 0, 0, 1)
+    batch.draw()
+    glPopMatrix()
+    glDisable(GL_DEPTH_TEST)
+
+def cart2sph(x,y,z):
+    XsqPlusYsq = x*x + y*y
+    r = np.sqrt(XsqPlusYsq + z**2)
+    theta = np.arctan2(z,np.sqrt(XsqPlusYsq))*180/3.1415926
+    phi = np.arctan2(y,x)*180/3.1415926
+    return r, theta, phi
 
 def find_finger_pos(dt):
-    global tip, mcp
+    global tip, mcp, rot
     with mp_hands.Hands(
         model_complexity=0,
         min_detection_confidence=0.5,
@@ -64,14 +127,9 @@ def find_finger_pos(dt):
                 #     mp_drawing_styles.get_default_hand_connections_style())
                 tip = [hand_landmarks.landmark[8].x, hand_landmarks.landmark[8].y,hand_landmarks.landmark[8].z]
                 mcp = [hand_landmarks.landmark[0].x, hand_landmarks.landmark[0].y,hand_landmarks.landmark[0].z]
-                rectangle.rotation = 0
-                rectangle.postiion = mcp[0]*WIDTH-WIDTH/2, mcp[1]*HEIGHT-HEIGHT/2
-                #rectangle.y = mcp[1]
-                rectangle.anchor_position = mcp[0]*WIDTH-WIDTH/2, mcp[1]*HEIGHT-HEIGHT/2
-                #print(mcp[0]*720, mcp[1]*480)
-                #rectangle.rotation = np.arctan2(tip[1]-mcp[1], tip[0]-mcp[0])*180/3.14159
-                #orientation = [tip[i]-mcp[i] for i in range(3)]
-                #print(orientation)
+                orientation = [tip[i]-mcp[i] for i in range(3)]
+                rot = cart2sph(orientation[0],orientation[1],orientation[2])
+                print(orientation)
         # Flip the image horizontally for a selfie-view display.
         # cv2.imshow('MediaPipe Hands', image)
         # if cv2.waitKey(5) & 0xFF == 27:
